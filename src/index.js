@@ -17,7 +17,7 @@ connectDB()
 })
 
 dotenv.config({
-    path : './env'
+    path : './.env'
 })
 
 
