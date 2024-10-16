@@ -4,6 +4,7 @@ import { User } from "../models/user.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
+import { json } from "express";
 
 const generateAccessTokenAndRefreshToken = async (userId) => {
   try {
@@ -248,4 +249,136 @@ const refreshAccessToken = asyncHandler ( async (req,res) => {
   }
 } )
 
-export { registerUser, loginUser, logoutUser,refreshAccessToken };
+const changeCurrentPassword = asyncHandler ( async(req,res) => {
+  const {oldPassword,newPassword} = req.body
+
+  // safe route h toh auth.middleware ki wajah se req.user accessable hoga
+  const user = await User.findById(req.user?._id)
+  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+  if(!isPasswordCorrect){
+    throw new ApiError(400, "Invalid old password")
+  }
+
+  user.password = newPassword
+  await user.save({validateBeforeSave : false})
+
+  return res.status(200)
+            .json(
+              new ApiResponse(200,{},"Password Changed Succefully")
+            )
+} )
+
+const getCurrentUser = asyncHandler ( async (req,res) => {
+  return res.status
+            .json(
+              200,
+              req.user,
+              "User fetched successfully "
+            )
+} )
+
+//Update Details : Note - Hamesha file(image,video etc) ki update ke liye alag aur fullName wagera ke
+//                        liye alag function likho (Production Approach)
+
+const updateAccountDetails = asyncHandler ( async(req,res) => {
+  const {fullName,email} = req.body;
+  if(!fullName || !email){
+    throw new ApiError(400,"All Fields are required")
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set : {
+        fullName,
+        email
+      }
+    },
+    {new : true}
+   
+  )
+
+  return res.status(200)
+            .json(
+              200,
+              user,
+              "Accounts Details Updated successfully "
+            )
+} )
+
+const updateUserAvatar = asyncHandler( async(req,res) => {
+  //multer middleware
+  const localAvatarPath = req.file?.path
+  if(!localAvatarPath){
+    throw new ApiError(400,"Avatar is mandatory so kindly fill it")
+  }
+
+  const avatar = await uploadOnCloudinary(localAvatarPath);
+  if(!avatar.url){
+    throw new ApiError(400,"Error while uploading on avatar")
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set : {
+        avatar : avatar.url
+      }
+    },
+    {new : true}
+  ).select("-password")
+
+  return res.status(200)
+            .json(
+              new ApiResponse(
+                200,
+                user,
+                "Avatar updated successfully"
+              )
+            )
+  
+} )
+
+const updateUserCoverImage = asyncHandler( async(req,res) => {
+  const localCoverImage = req.file?.path
+  if(!localCoverImage){
+    throw new ApiError(400,"Cover Image is not uploded")
+  }
+
+  const coverImage = await uploadOnCloudinary(localCoverImage);
+
+  if(!coverImage.url){
+    throw new ApiError(400,"Error while uploading Cover Image")
+  }
+
+  const user = User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set : {
+        coverImage : coverImage.url
+      }
+    },
+    {new : true}
+  )
+
+  return res.status
+            .json(
+              200,
+              json(
+                new ApiResponse(
+                  200,
+                  user,
+                  "Cover Image updated successfully"
+                )
+              )
+              
+            )
+
+
+} )
+
+export {
+   registerUser, loginUser, logoutUser,refreshAccessToken,changeCurrentPassword, getCurrentUser,
+   updateAccountDetails,updateUserAvatar,updateUserCoverImage
+  };
